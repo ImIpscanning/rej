@@ -1,6 +1,14 @@
 name: Build REJ Desktop for Windows
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'rej/**'
+      - 'rej_gui.py'
+      - 'pyproject.toml'
+      - 'scripts/build_windows.ps1'
+      - '.github/workflows/windows-build.yml'
   workflow_dispatch:
 
 permissions:

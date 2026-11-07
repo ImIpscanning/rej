@@ -7,7 +7,7 @@
 <p>
   <a href="https://github.com/ImIpscanning/rej/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/ImIpscanning/rej/tests.yml?branch=main&style=for-the-badge&label=Tests" alt="Tests" /></a>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+" />
-  <img src="https://img.shields.io/badge/Version-0.1.0-4F46E5?style=for-the-badge" alt="Version 0.1.0" />
+  <img src="https://img.shields.io/badge/Version-0.2.0-4F46E5?style=for-the-badge" alt="Version 0.2.0" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-111827?style=for-the-badge" alt="MIT License" /></a>
 </p>
 
@@ -30,10 +30,10 @@
 
 **REJ (Reverse Engineer Java)** is an open-source toolkit for understanding Java `.jar` files through **static inspection**. It is especially useful for inspecting the structure of **Minecraft server plugins** without starting a Minecraft server or running the target JAR.
 
-REJ identifies archive metadata, Java classes, superclass and interface relationships, methods, fields, plugin descriptors, and file hashes. It can compare two builds and export machine-readable JSON reports for documentation or further analysis.
+REJ identifies archive metadata, Java classes, superclass and interface relationships, methods, fields, plugin descriptors, and file hashes. It can compare two builds and export machine-readable JSON reports for documentation or further analysis. **v0.2.0 adds the REJ Desktop GUI and a local MCP server for Claude Code and Codex.**
 
 > [!IMPORTANT]
-> **REJ v0.1.0 is an early-stage project**, not a complete Java decompiler, deobfuscator, malware scanner, or sandbox. Decompiled Java source requires a separately installed **Vineflower** JAR. REJ does not claim that an inspected file is trustworthy or safe.
+> **REJ v0.2.0 is an early-stage project**, not a complete Java decompiler, deobfuscator, malware scanner, or sandbox. Decompiled Java source requires a separately installed **Vineflower** JAR. REJ does not claim that an inspected file is trustworthy or safe.
 
 ---
 
@@ -52,11 +52,13 @@ Two-version JAR comparison
 JSON evidence reports
 Interactive Windows terminal menu
 Optional Vineflower decompilation bridge
+Tkinter desktop GUI with class explorer, build comparison and JSON export
+Local MCP tools for Claude Code and Codex (stdio, read-only)
 ```
 
 ### Supported Inputs
 
-| Input | REJ v0.1.0 capability |
+| Input | REJ v0.2.0 capability |
 |:--|:--|
 | Java `.jar` | Inspect archive, class inventory and SHA-256 |
 | JVM `.class` inside a JAR | Read class, interface, field and method metadata |
@@ -142,7 +144,8 @@ REJ scans ZIP entries with size and count limits. Its basic inspection commands 
 |:--|:--:|:--|
 | **Python 3.11+** | Yes | REJ CLI and JAR inspection |
 | **Git** | No | Optional repository cloning |
-| **Java runtime** | No | Only for optional decompilation |
+| **Java runtime** | No | Only for optional decompilation
+| **Tkinter** | For GUI | Bundled with the standard Windows Python installer |
 | **Vineflower JAR** | No | Optional approximate Java reconstruction |
 
 ### Windows — Quick Start
@@ -180,10 +183,61 @@ rej --help
 
 ---
 
+## REJ Desktop — Graphical Interface
+
+**Windows:** Double-click `REJ-GUI.bat` from the extracted repository directory.
+
+**Any desktop environment with Python 3.11+ and Tkinter:**
+
+```bat
+py -3 -m rej gui
+```
+
+The desktop UI provides a dark purple-themed class explorer, JAR summary, fields and methods, binary comparison between plugin builds, JSON export, and an **MCP / AI Agents** tab that generates ready-to-copy client configuration for your installed Python location.
+
+The **REA Companion** tab checks whether the separate [Reverse Engineer Anything (REA)](https://github.com/morluto/rea) CLI is installed and links to its documentation. It is a companion panel, **not** a Java decompilation engine powered by REA.
+
+## MCP — Claude Code & Codex
+
+REJ provides four read-only tools over local JSON-RPC stdio, without extra Python dependencies:
+
+```txt
+rej_inspect_jar
+rej_list_classes
+rej_inspect_class
+rej_compare_jars
+```
+
+**Server command:**
+
+```bat
+py -3 -m rej mcp
+```
+
+The MCP server does **not** display a normal terminal menu and must be started by a compatible MCP client to exchange messages.
+
+**Claude Code setup**, using your real paths to Python and the REJ launcher:
+
+```bat
+claude mcp add --scope user rej -- "C:\Path\To\python.exe" "C:\Path\To\rej\rej_mcp.py"
+claude mcp list
+```
+
+**Codex setup:**
+
+```bat
+codex mcp add rej -- "C:\Path\To\python.exe" "C:\Path\To\rej\rej_mcp.py"
+codex mcp list
+```
+
+For a tailored config on your own machine, open the GUI's **MCP / AI Agents** tab. Detailed setup, JSON/TOML examples, troubleshooting and security notes are in **[docs/MCP.md](docs/MCP.md)**.
+
+---
+
 ## Terminal Interface
 
 ```txt
-REJ  |  Reverse Engineer Java  |  v0.1.0
+REJ  |  Reverse Engineer Java  |  v0.2.0
 ===================================================
   [1] Inspect JAR / Minecraft plugin
   [2] List classes
@@ -269,7 +323,7 @@ Reports can include a structure like:
 ```json
 {
   "tool": "REJ",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "summary": {
     "class_count": 12,
     "resource_count": 4,
@@ -325,6 +379,9 @@ rej/
 
 ## Testing
 
+The test suite now covers MCP handshakes, tool registration, stdio launcher behavior, config examples, read-only inspection and a GUI import smoke test, in addition to the existing JAR parser tests.
+
+
 Run the project tests locally:
 
 ```bat
@@ -355,9 +412,10 @@ Automated tests do not guarantee compatibility with every JAR or every plugin.
 
 | Version | Focus | Status |
 |:--|:--|:--|
-| **v0.1.0** | JAR inventory, Minecraft metadata, class explorer, diff and JSON | **Current MVP** |
-| **v0.2.0** | Better JVM descriptors, method search, deeper plugin reporting | Planned |
-| **v0.3.0** | Bytecode disassembly and reference navigation | Planned |
+| **v0.2.0** | JAR inventory, Minecraft metadata, class explorer, diff and JSON | **Current MVP** |
+| **v0.2.0** | Desktop GUI, Claude/Codex MCP server, basic REA companion panel | **Current** |
+| **v0.3.0** | Better JVM descriptors, method search, deeper plugin reporting | Planned |
+| **v0.4.0** | Bytecode disassembly and reference navigation | Planned |
 | **Future** | GUI, dependency visualization, agent/MCP integration | Exploring |
 
 A feature listed as planned is **not available in the current release**.

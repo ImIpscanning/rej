@@ -9,6 +9,7 @@ from typing import Any
 
 from .classfile import ClassFormatError, parse_classfile
 from .metadata import identify_plugin
+from . import __version__
 
 MAX_ENTRIES = 50_000
 MAX_TOTAL_UNCOMPRESSED = 500 * 1024 * 1024
@@ -101,7 +102,7 @@ def inspect_jar(path: str | Path) -> dict[str, Any]:
     classes.sort(key=lambda item: item["name"])
     return {
         "tool": "REJ",
-        "version": "0.1.0",
+        "version": __version__,
         "file": str(jar),
         "size_bytes": jar.stat().st_size,
         "sha256": _hash_file(jar),

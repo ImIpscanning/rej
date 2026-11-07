@@ -11,10 +11,11 @@ import zipfile
 
 from .archive import JarInspectionError, compare_jars, inspect_class, inspect_jar
 from .classfile import ClassFormatError
+from . import __version__
 
 
 def print_header() -> None:
-    print("REJ  |  Reverse Engineer Java  |  v0.1.0")
+    print(f"REJ  |  Reverse Engineer Java  |  v{__version__}")
     print("=" * 51)
 
 
@@ -52,7 +53,7 @@ def run_decompiler(source: str, tool: str, output: str, timeout: int) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="rej", description="Read-only Java JAR inspection and comparison")
-    parser.add_argument("--version", action="version", version="REJ 0.1.0")
+    parser.add_argument("--version", action="version", version=f"REJ {__version__}")
     subs = parser.add_subparsers(dest="command", required=True)
     inspect = subs.add_parser("inspect", help="Inspect JAR and detect Minecraft plugin metadata")
     inspect.add_argument("jar")
@@ -71,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("new")
     diff.add_argument("--json", metavar="PATH")
     subs.add_parser("menu", help="Interactive terminal menu (Windows-friendly)")
+    subs.add_parser("gui", help="Start REJ Desktop GUI (Tkinter)")
+    subs.add_parser("mcp", help="Start read-only Model Context Protocol (stdio) server")
     dec = subs.add_parser("decompile", help="Decompile using your local Vineflower JAR")
     dec.add_argument("jar")
     dec.add_argument("--vineflower", required=True, metavar="PATH", help="Path to a local Vineflower JAR")
@@ -125,6 +128,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "menu":
             return interactive_menu()
+        if args.command == "gui":
+            from .gui import main as gui_main
+            gui_main()
+            return 0
+        if args.command == "mcp":
+            from .mcp_server import serve
+            serve()
+            return 0
         if args.command == "decompile":
             if not 1 <= args.timeout <= 3600:
                 raise JarInspectionError("Timeout must be between 1 and 3600 seconds")
@@ -186,3 +197,4 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[!] {exc}", file=sys.stderr)
         return 1
     return 0
+

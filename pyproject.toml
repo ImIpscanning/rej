@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rej-inspector"
+version = "0.1.0"
+description = "REJ - Reverse Engineer Java: JAR and Minecraft plugin inspection"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "REJ Contributors" }]
+keywords = ["java", "jar", "minecraft", "reverse-engineering", "static-analysis"]
+
+[project.scripts]
+rej = "rej.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["rej*"]

@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+build/
+dist/
+reports/
+decompiled/
+*.jar
+!examples/HelloPlugin-demo.jar
+!tests/fixtures/*.jar

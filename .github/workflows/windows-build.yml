@@ -1,0 +1,32 @@
+name: Build REJ Desktop for Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Run tests before packaging
+        run: python -m unittest discover -s tests -v
+      - name: Build standalone EXE
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - name: Verify EXE produced
+        shell: pwsh
+        run: |
+          if (!(Test-Path dist/REJ-Desktop.exe)) { throw 'EXE was not produced' }
+          Get-FileHash dist/REJ-Desktop.exe -Algorithm SHA256
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: REJ-Desktop-Windows-v0.3.0
+          path: dist/REJ-Desktop.exe
+          if-no-files-found: error

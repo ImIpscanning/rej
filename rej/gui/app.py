@@ -13,19 +13,15 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import webbrowser
 
-from . import __version__
-from .archive import compare_jars, inspect_jar, inspect_class
-from .integrations import claude_config, codex_config, claude_command, codex_command, connection_status
+from .. import __version__
+from ..core.archive import compare_jars
+from ..core.analysis import cached_inspect, cached_class, search_methods, method_bytecode
+from .explorer import populate_tree, class_details, bytecode_details
+from .comparison import format_comparison
+from .settings import config_for, install_command_for
+from ..integrations import connection_status
 
-BG = "#0B1020"
-PANEL = "#151B2E"
-PANEL2 = "#1E2740"
-TEXT = "#EDF1FF"
-MUTED = "#9CA9C7"
-ACCENT = "#8B5CF6"
-ACCENT_HOVER = "#A78BFA"
-GREEN = "#34D399"
-BORDER = "#2C3550"
+from .theme import BG, PANEL, PANEL2, TEXT, MUTED, ACCENT, ACCENT_HOVER, GREEN, BORDER
 
 
 class REJDesktop(tk.Tk):
@@ -38,6 +34,11 @@ class REJDesktop(tk.Tk):
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="rej-scan")
         self._results: queue.Queue = queue.Queue()
         self._report: dict | None = None
+        self._class_items: dict[str, dict] = {}
+        self._selected_item: dict | None = None
+        self._method_catalog: dict[str, dict] = {}
+        self._generations = {"scan":0, "class":0, "diff":0, "methods":0, "bytecode":0}
+        self._jobs = 0
         self._jar_path = tk.StringVar()
         self._compare_path = tk.StringVar()
         self._filter = tk.StringVar()
@@ -123,6 +124,13 @@ class REJDesktop(tk.Tk):
         filter_entry = tk.Entry(left, textvariable=self._filter, bg=PANEL2, fg=TEXT, insertbackground=TEXT,
                                 relief="flat", font=("Segoe UI", 10), highlightbackground=BORDER, highlightthickness=1)
         filter_entry.pack(fill="x", ipady=9, pady=(0, 10), padx=(0, 12))
+        method_bar = tk.Frame(left, bg=PANEL)
+        method_bar.pack(fill="x", pady=(0, 8), padx=(0, 12))
+        self._method_search = tk.StringVar()
+        tk.Entry(method_bar, textvariable=self._method_search, bg=PANEL2, fg=TEXT,
+                 insertbackground=TEXT, relief="flat", font=("Segoe UI", 10)).pack(
+                     side="left", fill="x", expand=True, ipady=8)
+        self._button(method_bar, "Find Methods", self._find_methods).pack(side="left", padx=(7, 0))
         self._filter.trace_add("write", lambda *_: self._populate())
         cols = ("java", "methods")
         self.tree = ttk.Treeview(left, columns=cols, show="tree headings", selectmode="browse")
@@ -140,6 +148,11 @@ class REJDesktop(tk.Tk):
         self._label(right, "INSPECTION DETAILS", 10, MUTED, True).pack(anchor="w", padx=(14, 0), pady=(0, 8))
         self.details = tk.Text(right, bg=PANEL2, fg=TEXT, relief="flat", bd=0, wrap="word",
                                padx=18, pady=16, font=("Consolas", 10), spacing2=3)
+        method_row = tk.Frame(right, bg=PANEL)
+        method_row.pack(fill="x", padx=(12, 0), pady=(0, 7))
+        self.method_picker = ttk.Combobox(method_row, state="readonly", values=[], width=31)
+        self.method_picker.pack(side="left", fill="x", expand=True)
+        self._button(method_row, "Bytecode", self._show_bytecode).pack(side="left", padx=(7, 0))
         self.details.pack(fill="both", expand=True, padx=(12, 0))
         self._show_text(self.details, "Open a JAR to begin.\n\nSelect a class to see:\n  • class version\n  • superclass and interfaces\n  • fields and methods\n  • JVM descriptors")
 
@@ -166,7 +179,7 @@ class REJDesktop(tk.Tk):
 
     def _build_ai(self) -> None:
         self._label(self.ai_tab, "Connect REJ to Claude Code and Codex", 15, TEXT, True).pack(anchor="w")
-        self._label(self.ai_tab, "Four read-only MCP tools. Local stdio transport. No tokens or cloud services required by REJ.", 10, MUTED).pack(anchor="w", pady=(4, 20))
+        self._label(self.ai_tab, "Seven read-only MCP tools. Local stdio transport. No tokens or cloud services required by REJ.", 10, MUTED).pack(anchor="w", pady=(4, 20))
         selector = tk.Frame(self.ai_tab, bg=PANEL)
         selector.pack(fill="x")
         for mode in ("Claude Code", "Codex"):
@@ -184,7 +197,7 @@ class REJDesktop(tk.Tk):
         self._button(bar, "Copy Install Command", self._copy_command).pack(side="left")
         self._label(self.ai_tab, "Install: Python 3.11+, download REJ, then register the shown local MCP command in your client. Restart the client and verify /mcp.",
                     10, MUTED, wraplength=900, justify="left").pack(anchor="w", pady=(6, 12))
-        self._label(self.ai_tab, "Tools: rej_inspect_jar  •  rej_list_classes  •  rej_inspect_class  •  rej_compare_jars", 10, GREEN).pack(anchor="w")
+        self._label(self.ai_tab, "Tools: inspect  •  classes  •  class  •  compare  •  search methods  •  bytecode  •  REA status", 10, GREEN).pack(anchor="w")
         self._refresh_config()
 
     def _build_rea(self) -> None:
@@ -211,35 +224,50 @@ class REJDesktop(tk.Tk):
         if selected:
             (variable or self._jar_path).set(selected)
 
-    def _run_async(self, fn, on_success) -> None:
+    def _run_async(self, fn, on_success, channel="scan") -> None:
+        self._generations[channel] += 1
+        generation = self._generations[channel]
+        self._jobs += 1
+        self.progress.start(15)
         self._status.set("Working  •  Analyzing local archive...")
         def completed(future):
             try:
-                self._results.put((on_success, future.result(), None))
+                self._results.put((channel, generation, on_success, future.result(), None))
             except Exception as exc:
-                self._results.put((on_success, None, exc))
+                self._results.put((channel, generation, on_success, None, exc))
         self._executor.submit(fn).add_done_callback(completed)
 
     def _poll(self) -> None:
         while True:
             try:
-                callback, value, exc = self._results.get_nowait()
+                channel, generation, callback, value, exc = self._results.get_nowait()
             except queue.Empty:
                 break
+            self._jobs = max(0, self._jobs-1)
+            if generation != self._generations[channel]:
+                continue  # Ignore an obsolete selection, analysis, or comparison.
             if exc:
                 self._status.set("Error  •  See details")
                 messagebox.showerror("REJ analysis error", str(exc))
             else:
                 callback(value)
                 self._status.set("Ready  •  Analysis complete")
-        self.after(100, self._poll)
+        if not self._jobs:
+            self.progress.stop()
+        if self.winfo_exists():
+            self.after(100, self._poll)
 
     def _scan(self) -> None:
         path = self._jar_path.get().strip()
         if not path:
             messagebox.showwarning("Choose a JAR", "Please select a .jar archive first.")
             return
-        self._run_async(lambda: inspect_jar(path), self._loaded)
+        for name in ("class", "methods", "bytecode"):
+            self._generations[name] += 1
+        self._selected_item = None
+        self._report = None
+        self.method_picker.configure(values=[])
+        self._run_async(lambda: cached_inspect(path), self._loaded, "scan")
 
     def _loaded(self, report: dict) -> None:
         self._report = report
@@ -257,51 +285,69 @@ class REJDesktop(tk.Tk):
     def _populate(self) -> None:
         if not hasattr(self, "tree"):
             return
-        for key in self.tree.get_children():
-            self.tree.delete(key)
-        if not self._report:
-            return
-        query = self._filter.get().casefold()
-        for item in self._report["classes"]:
-            if query not in item["name"].casefold():
-                continue
-            self.tree.insert("", "end", iid=item["path"], text=item["name"],
-                             values=(item["java_version"].replace("Java ", ""), item["method_count"]))
+        self._class_items = populate_tree(
+            self.tree, self._report["classes"] if self._report else [], self._filter.get())
 
     def _selected_class(self, _event=None) -> None:
-        selection = self.tree.selection()
+        selection=self.tree.selection()
         if not selection or not self._report:
             return
-        name = self.tree.item(selection[0], "text")
-        path = self._report["file"]
-        def show(data):
-            output = [f"CLASS {data['name']}", "=" * 42,
-                      f"Java: {data['java_version']}", f"Superclass: {data['superclass']}",
-                      f"Interfaces: {', '.join(data['interfaces']) or '-'}", "", "FIELDS", "-" * 40]
-            output.extend(f"{' '.join(f['flags'])} {f['name']} : {f['descriptor']}" for f in data["fields"])
-            output += ["", "METHODS", "-" * 40]
-            output.extend(f"{' '.join(m['flags'])} {m['name']}{m['descriptor']}" for m in data["methods"])
-            self._show_text(self.details, "\n".join(output))
-        self._run_async(lambda: inspect_class(path, name), show)
+        item=self._class_items.get(selection[0])
+        if item is None:
+            return  # Package, not a class.
+        self._selected_item=item
+        self._generations['bytecode'] += 1
+        self._method_catalog = {}
+        self.method_picker.configure(values=[])
+        jar=self._report["file"]
+        def loaded(data):
+            self._method_catalog = {f"{m['name']}{m['descriptor']}":m for m in data['methods']}
+            keys=list(self._method_catalog)
+            self.method_picker.configure(values=keys)
+            if keys:
+                self.method_picker.current(0)
+            self._show_text(self.details, class_details(data))
+        self._run_async(lambda: cached_class(jar, item['path']), loaded, "class")
+
+    def _find_methods(self) -> None:
+        if not self._report:
+            messagebox.showinfo('Open a JAR', 'Inspect a JAR first')
+            return
+        query=self._method_search.get().strip()
+        if not query:
+            messagebox.showinfo('Query required','Enter part of a method or class name')
+            return
+        jar=self._report['file']
+        def loaded(data):
+            lines=[f"METHOD SEARCH: {query}",f"Matches: {data['total_matches']}",'']
+            lines += [f"{x['class']}.{x['method']}{x['descriptor']}" for x in data['methods']]
+            if data['next_offset'] is not None:
+                lines.append('Additional results available through MCP / CLI pagination.')
+            self._show_text(self.details, '\n'.join(lines))
+        self._run_async(lambda: search_methods(jar,query,limit=150),loaded,'methods')
+
+    def _show_bytecode(self) -> None:
+        if not self._report or not self._selected_item:
+            messagebox.showinfo('Select class', 'Select a class first')
+            return
+        method=self._method_catalog.get(self.method_picker.get())
+        if not method:
+            messagebox.showinfo('Select method', 'Select a method first')
+            return
+        jar=self._report['file']; class_path=self._selected_item['path']
+        self._run_async(lambda: method_bytecode(jar, class_path, method['name'],
+                         method['descriptor'], limit=200),
+                         lambda data:self._show_text(self.details,bytecode_details(data)), 'bytecode')
 
     def _diff(self) -> None:
         first, second = self._jar_path.get().strip(), self._compare_path.get().strip()
         if not first or not second:
             messagebox.showwarning("Choose two JARs", "Select an old JAR and a new JAR.")
             return
-        self._run_async(lambda: compare_jars(first, second), self._diff_loaded)
+        self._run_async(lambda: compare_jars(first, second), self._diff_loaded,"diff")
 
-    def _diff_loaded(self, report: dict) -> None:
-        output = ["JAR VERSION COMPARISON", "=" * 48, f"Old: {Path(report['old']).name}",
-                  f"New: {Path(report['new']).name}", ""]
-        for field in ("added", "removed", "modified"):
-            output += [f"{field.upper()} ({len(report[field])})", "-" * 48]
-            output += [f"  {name}" for name in report[field][:300]]
-            if len(report[field]) > 300:
-                output += [f"  ... {len(report[field]) - 300} more"]
-            output += [""]
-        output += [f"Unchanged classes: {report['unchanged_count']}"]
-        self._show_text(self.diff_output, "\n".join(output))
+    def _diff_loaded(self, report:dict) -> None:
+        self._show_text(self.diff_output, format_comparison(report))
 
     def _export(self) -> None:
         if not self._report:
@@ -319,7 +365,7 @@ class REJDesktop(tk.Tk):
         widget.configure(state="disabled")
 
     def _refresh_config(self) -> None:
-        content = claude_config() if self._mode.get() == "Claude Code" else codex_config()
+        content = config_for(self._mode.get())
         self._show_text(self.config_output, content)
 
     def _copy(self, text: str) -> None:
@@ -328,10 +374,10 @@ class REJDesktop(tk.Tk):
         self._status.set("Copied to clipboard")
 
     def _copy_config(self) -> None:
-        self._copy(claude_config() if self._mode.get() == "Claude Code" else codex_config())
+        self._copy(config_for(self._mode.get()))
 
     def _copy_command(self) -> None:
-        self._copy(claude_command() if self._mode.get() == "Claude Code" else codex_command())
+        self._copy(install_command_for(self._mode.get()))
 
     def _refresh_rea(self) -> None:
         statuses = connection_status()

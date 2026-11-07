@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rej-inspector"
-version = "0.2.0"
+version = "0.3.0"
 description = "REJ - Reverse Engineer Java: JAR and Minecraft plugin inspection"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,6 +14,10 @@ keywords = ["java", "jar", "minecraft", "reverse-engineering", "static-analysis"
 
 [project.scripts]
 rej = "rej.cli:main"
+rej-mcp = "rej.mcp.server:serve"
+
+[project.gui-scripts]
+rej-gui = "rej.gui:main"
 
 [tool.setuptools.packages.find]
 include = ["rej*"]

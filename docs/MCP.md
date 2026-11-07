@@ -1,13 +1,13 @@
 # REJ MCP Integration — Claude Code & Codex
 
-REJ v0.2.0 runs a local, **read-only MCP server over stdio**. It exposes Java JAR inspection to agents using the Model Context Protocol without uploading archive bytes to a REJ service or executing the Java plugin. As with any local agent, the agent may include excerpts of returned metadata in its conversation: review the client/provider's data handling before connecting private plugins.
+REJ v0.3.0 runs a local, **read-only MCP server over stdio**. It exposes Java JAR inspection to agents using the Model Context Protocol without uploading archive bytes to a REJ service or executing the Java plugin. As with any local agent, the agent may include excerpts of returned metadata in its conversation: review the client/provider's data handling before connecting private plugins.
 
 ## Requirements
 
 - Windows, Linux or macOS with Python **3.11+**.
 - This REJ repository downloaded and extracted, or installed locally via `python -m pip install .`.
 - Claude Code and/or Codex CLI for the respective client (install the client separately).
-- **No extra Python MCP package is required.** REJ implements the four read-only MCP tools directly over stdio.
+- **No extra Python MCP package is required.** REJ implements the seven read-only MCP tools directly over stdio.
 
 ## Verify MCP server locally
 
@@ -68,10 +68,13 @@ Codex's desktop app / CLI / IDE extension share the same MCP configuration on su
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `rej_inspect_jar` | `jar_path` | Archive hash, summary, plugin metadata and first 200 classes |
-| `rej_list_classes` | `jar_path`, optional `filter`, `limit` | Filtered classes (up to 200 per request) |
+| `rej_inspect_jar` | `jar_path`, optional `offset`, `limit` | Archive hash, summary, plugin metadata and a paged class preview |
+| `rej_list_classes` | `jar_path`, optional `filter`, `offset`, `limit` | Filtered classes (up to 200 per request, `offset` pagination) |
 | `rej_inspect_class` | `jar_path`, `class_name` | Class metadata and first 200 methods / fields |
-| `rej_compare_jars` | `old_path`, `new_path` | Added, removed, modified class paths and unchanged count |
+| `rej_compare_jars` | `old_path`, `new_path`, optional `offset`, `limit` | Paged class-path/hash difference report |
+| `rej_search_methods` | `jar_path`, `query`, optional `offset`, `limit` | Filtered method signatures |
+| `rej_disassemble_method` | `jar_path`, `class_name`, `method_name`, optional `descriptor`, `offset`, `limit` | JVM instruction mnemonics and symbolic constant pool references |
+| `rej_rea_status` | No arguments | Whether the separate REA executable is found on PATH |
 
 The tools accept **local paths**, not a URL or uploaded archive. Reports are bounded for MCP responses. For full inspection outputs use REJ CLI's `--json` or the GUI's **Export JSON** action.
 

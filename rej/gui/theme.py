@@ -1,0 +1,10 @@
+"""REJ Desktop theme palette and shared widget helpers."""
+BG = '#0B1020'
+PANEL = '#151B2E'
+PANEL2 = '#1E2740'
+TEXT = '#EDF1FF'
+MUTED = '#9CA9C7'
+ACCENT = '#8B5CF6'
+ACCENT_HOVER = '#A78BFA'
+GREEN = '#34D399'
+BORDER = '#2C3550'

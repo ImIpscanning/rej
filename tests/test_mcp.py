@@ -24,8 +24,8 @@ class MCPTests(unittest.TestCase):
 
     def test_tool_list(self):
         result = handle_message({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-        self.assertEqual(len(result["result"]["tools"]), 4)
-        self.assertEqual({t["name"] for t in TOOLS}, {"rej_inspect_jar", "rej_list_classes", "rej_inspect_class", "rej_compare_jars"})
+        self.assertEqual(len(result["result"]["tools"]), 7)
+        self.assertEqual({t["name"] for t in TOOLS}, {"rej_inspect_jar", "rej_list_classes", "rej_inspect_class", "rej_compare_jars", "rej_search_methods", "rej_disassemble_method", "rej_rea_status"})
 
     def test_invalid_tool_arguments(self):
         response = handle_message({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "rej_inspect_jar", "arguments": {"jar_path": 123}}})

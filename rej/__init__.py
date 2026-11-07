@@ -1,3 +1,3 @@
 """REJ: Reverse Engineer Java — safe, read-only JAR metadata inspection."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

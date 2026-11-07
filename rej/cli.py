@@ -10,6 +10,9 @@ import sys
 import zipfile
 
 from .archive import JarInspectionError, compare_jars, inspect_class, inspect_jar
+from .core.analysis import search_methods, method_bytecode
+from .integrations.rea import rea_status
+from . import __version__
 from .classfile import ClassFormatError
 from . import __version__
 
@@ -71,6 +74,21 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("old")
     diff.add_argument("new")
     diff.add_argument("--json", metavar="PATH")
+    methods = subs.add_parser("methods", help="Search Java methods and class names")
+    methods.add_argument("jar")
+    methods.add_argument("query")
+    methods.add_argument("--offset", type=int, default=0)
+    methods.add_argument("--limit", type=int, default=100)
+    methods.add_argument("--json", metavar="PATH")
+    bytecode = subs.add_parser("bytecode", help="Disassemble JVM method instructions without executing code")
+    bytecode.add_argument("jar")
+    bytecode.add_argument("class_name")
+    bytecode.add_argument("method_name")
+    bytecode.add_argument("--descriptor", default=None)
+    bytecode.add_argument("--offset", type=int, default=0)
+    bytecode.add_argument("--limit", type=int, default=100)
+    bytecode.add_argument("--json", metavar="PATH")
+    subs.add_parser("rea-status", help="Check whether the optional REA CLI is available")
     subs.add_parser("menu", help="Interactive terminal menu (Windows-friendly)")
     subs.add_parser("gui", help="Start REJ Desktop GUI (Tkinter)")
     subs.add_parser("mcp", help="Start read-only Model Context Protocol (stdio) server")
@@ -136,12 +154,32 @@ def main(argv: list[str] | None = None) -> int:
             from .mcp_server import serve
             serve()
             return 0
+        if args.command == "rea-status":
+            print(json.dumps(rea_status(), indent=2))
+            return 0
         if args.command == "decompile":
             if not 1 <= args.timeout <= 3600:
                 raise JarInspectionError("Timeout must be between 1 and 3600 seconds")
             return run_decompiler(args.jar, args.vineflower, args.out, args.timeout)
         print_header()
-        if args.command == "inspect":
+        if args.command == "methods":
+            report = search_methods(args.jar, args.query, offset=args.offset, limit=args.limit)
+            print(f"Matches: {report['total_matches']}")
+            for item in report['methods']:
+                print(f"  {item['class']}.{item['method']}{item['descriptor']}")
+            if report['next_offset'] is not None:
+                print(f"Next page: --offset {report['next_offset']}")
+            write_json(report, args.json)
+        elif args.command == "bytecode":
+            report = method_bytecode(args.jar,args.class_name,args.method_name,args.descriptor,
+                                     offset=args.offset,limit=args.limit)
+            print(f"Method: {report['class']}.{report['method']}{report['descriptor']}")
+            for ins in report['instructions']:
+                print(f"  {ins['offset']:05d} {ins['mnemonic']:<20} {ins['operand'].get('reference',ins['operand'].get('hex',''))}")
+            if report.get('next_offset') is not None:
+                print(f"Next page: --offset {report['next_offset']}")
+            write_json(report, args.json)
+        elif args.command == "inspect":
             report = inspect_jar(args.jar)
             summary = report["summary"]
             print(f"File:     {report['file']}")

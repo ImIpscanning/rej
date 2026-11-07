@@ -8,5 +8,11 @@ dist/
 reports/
 decompiled/
 *.jar
-!examples/HelloPlugin-demo.jar
 !tests/fixtures/*.jar
+
+*.spec
+*.log
+.coverage
+*.egg-info/
+dist/
+build/

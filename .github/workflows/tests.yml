@@ -23,7 +23,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install package and CLI entry points
+        run: python -m pip install .
       - name: Unit tests
         run: python -m unittest discover -s tests -v
       - name: Inspect demo JAR
-        run: python -m rej inspect examples/HelloPlugin-demo.jar
+        run: rej inspect examples/HelloPlugin-demo.jar
+      - name: Disassemble demo method
+        run: rej bytecode examples/HelloPlugin-demo.jar org.example.HelloPlugin greet
+      - name: Test REJ installed MCP launcher
+        shell: bash
+        run: |
+          python -c 'import json, subprocess; p=subprocess.run(["rej-mcp"], input=json.dumps({"jsonrpc":"2.0","id":1,"method":"tools/list"})+"\n", text=True,capture_output=True,timeout=15); assert p.returncode==0, p.stderr; assert len(json.loads(p.stdout)["result"]["tools"])>=7'
+      - name: Headless GUI construction (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python -c "from rej.gui import REJDesktop; app=REJDesktop(); app.update(); app.destroy()"
